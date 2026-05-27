@@ -1,0 +1,68 @@
+name: Taiwan Stock Monitor
+
+on:
+  schedule:
+    # 早安報：每週一到五 08:15 台灣時間 = UTC 00:15
+    - cron: "15 0 * * 1-5"
+    # 盤後分析：每週一到五 18:00 台灣時間 = UTC 10:00
+    - cron: "0 10 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  morning_brief:
+    name: 早安市場報告
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && contains(github.event.schedule, '15 0'))
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run morning brief
+        env:
+          LINE_CHANNEL_TOKEN: ${{ secrets.LINE_CHANNEL_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: python -c "
+from morning_brief import build_morning_brief
+from notifier import send_line
+msg = build_morning_brief()
+print(msg)
+send_line(msg)
+print('已推播到 LINE')
+"
+
+  monitor:
+    name: 盤後策略分析
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && contains(github.event.schedule, '0 10'))
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run monitor
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          LINE_CHANNEL_TOKEN: ${{ secrets.LINE_CHANNEL_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: python main.py
